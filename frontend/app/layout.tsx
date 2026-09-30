@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Geist_Mono, Inter } from "next/font/google";
+import type { ReactNode } from "react";
 
 import { Providers } from "@/components/providers";
 import { SiteHeader } from "@/components/site-header";
@@ -23,7 +24,11 @@ export const metadata: Metadata = {
   description: "FastAPI + Next.js + Postgres starter",
 };
 
-export default function RootLayout({ children }: LayoutProps<"/">) {
+type RootLayoutProps = {
+  children: ReactNode;
+};
+
+export default function RootLayout({ children }: RootLayoutProps) {
   return (
     <html
       lang="en"
