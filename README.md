@@ -540,6 +540,33 @@ The frontend is not wired to CI — `make deploy-frontend` stays a local command
 
 ## 14. Where to take it next
 
+### Cognito authentication infrastructure
+
+`infra/auth.yml` defines a separate `peach-auth` stack with a self-service
+Cognito user pool, a public authorization-code SPA client, Google federation,
+and Cognito Managed Login. It does not modify the frontend or backend stacks.
+
+Before deploying, provide the Google Web OAuth client credentials either as
+exported shell variables or in the Git-ignored `.env.auth.local` file:
+
+```bash
+GOOGLE_CLIENT_ID=...
+GOOGLE_CLIENT_SECRET=...
+```
+
+The Google secret is passed to a CloudFormation `NoEcho` parameter through a
+temporary mode-0600 file. It is never written to `.env`, frontend configuration,
+or CloudFormation outputs. Deploy with `make deploy-auth`. The configured Google
+redirect URI is:
+
+```text
+https://sofia-peach.auth.us-east-1.amazoncognito.com/oauth2/idpresponse
+```
+
+The production callback and logout URL are both
+`https://www.sofia-peach.pp.ua/login/`. The public `/login/` frontend route and
+token handling are intentionally implemented separately from this stack.
+
 When the real domain arrives, replace the `Item` model, schemas, service, routes and the `/items`
 screen, and add an Alembic revision for the new tables. Everything else — config, database wiring,
 Compose, Dockerfiles, tooling, tests scaffolding — stays as is.

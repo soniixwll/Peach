@@ -2,7 +2,10 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useAuth } from "react-oidc-context";
 
+import { Button } from "@/components/ui/button";
+import { authIsConfigured, cognitoLogoutUrl } from "@/lib/auth";
 import { cn } from "@/lib/utils";
 
 const links = [
@@ -12,6 +15,12 @@ const links = [
 
 export function SiteHeader() {
   const pathname = usePathname();
+  const auth = useAuth();
+
+  const signOut = async () => {
+    await auth.removeUser();
+    window.location.assign(cognitoLogoutUrl());
+  };
 
   return (
     <header className="sticky top-0 z-40 border-b border-border/70 bg-background/80 backdrop-blur-md">
@@ -51,6 +60,28 @@ export function SiteHeader() {
             );
           })}
         </nav>
+
+        <div className="ml-auto flex items-center gap-3">
+          {auth.isAuthenticated ? (
+            <>
+              <span className="hidden max-w-48 truncate text-sm text-muted-foreground sm:inline">
+                {auth.user?.profile.email}
+              </span>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={signOut}
+              >
+                Sign out
+              </Button>
+            </>
+          ) : authIsConfigured && !auth.isLoading ? (
+            <Button asChild variant="outline" size="sm">
+              <Link href="/login">Sign in</Link>
+            </Button>
+          ) : null}
+        </div>
       </div>
     </header>
   );

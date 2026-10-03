@@ -1,0 +1,153 @@
+AWSTemplateFormatVersion: "2010-09-09"
+
+Description: >-
+  Peach end-user authentication: Cognito email/password accounts, Google as an
+  external identity provider, and Managed Login for the public frontend SPA.
+
+Parameters:
+  ProjectName:
+    Type: String
+    Default: peach
+
+  CognitoDomainPrefix:
+    Type: String
+    Default: sofia-peach
+    AllowedPattern: "^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$"
+
+  CallbackUrl:
+    Type: String
+    Default: https://www.sofia-peach.pp.ua/login/
+
+  LogoutUrl:
+    Type: String
+    Default: https://www.sofia-peach.pp.ua/login/
+
+  GoogleClientId:
+    Type: String
+    MinLength: 1
+    NoEcho: true
+
+  GoogleClientSecret:
+    Type: String
+    MinLength: 1
+    NoEcho: true
+
+Resources:
+  UserPool:
+    Type: AWS::Cognito::UserPool
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      UserPoolName: !Sub "${ProjectName}-users"
+      AdminCreateUserConfig:
+        AllowAdminCreateUserOnly: false
+      UsernameAttributes: [email]
+      AutoVerifiedAttributes: [email]
+      UsernameConfiguration:
+        CaseSensitive: false
+      MfaConfiguration: "OFF"
+      AccountRecoverySetting:
+        RecoveryMechanisms:
+          - Name: verified_email
+            Priority: 1
+      UserAttributeUpdateSettings:
+        AttributesRequireVerificationBeforeUpdate: [email]
+      VerificationMessageTemplate:
+        DefaultEmailOption: CONFIRM_WITH_CODE
+      Policies:
+        PasswordPolicy:
+          MinimumLength: 8
+          RequireLowercase: true
+          RequireNumbers: true
+          RequireSymbols: false
+          RequireUppercase: true
+          TemporaryPasswordValidityDays: 7
+      Schema:
+        - Name: email
+          AttributeDataType: String
+          Mutable: true
+          Required: true
+        - Name: name
+          AttributeDataType: String
+          Mutable: true
+          Required: false
+      UserPoolTags:
+        PROJECT_NAME: !Ref ProjectName
+
+  GoogleIdentityProvider:
+    Type: AWS::Cognito::UserPoolIdentityProvider
+    Properties:
+      UserPoolId: !Ref UserPool
+      ProviderName: Google
+      ProviderType: Google
+      ProviderDetails:
+        client_id: !Ref GoogleClientId
+        client_secret: !Ref GoogleClientSecret
+        authorize_scopes: openid email profile
+      AttributeMapping:
+        email: email
+        name: name
+        username: sub
+
+  SpaClient:
+    Type: AWS::Cognito::UserPoolClient
+    DependsOn: GoogleIdentityProvider
+    Properties:
+      ClientName: !Sub "${ProjectName}-frontend"
+      UserPoolId: !Ref UserPool
+      GenerateSecret: false
+      PreventUserExistenceErrors: ENABLED
+      EnableTokenRevocation: true
+      AllowedOAuthFlowsUserPoolClient: true
+      AllowedOAuthFlows: [code]
+      AllowedOAuthScopes: [openid, email, profile]
+      SupportedIdentityProviders: [COGNITO, Google]
+      CallbackURLs: [!Ref CallbackUrl]
+      LogoutURLs: [!Ref LogoutUrl]
+      ExplicitAuthFlows:
+        - ALLOW_USER_SRP_AUTH
+        - ALLOW_REFRESH_TOKEN_AUTH
+      AccessTokenValidity: 60
+      IdTokenValidity: 60
+      RefreshTokenValidity: 30
+      TokenValidityUnits:
+        AccessToken: minutes
+        IdToken: minutes
+        RefreshToken: days
+
+  UserPoolDomain:
+    Type: AWS::Cognito::UserPoolDomain
+    Properties:
+      Domain: !Ref CognitoDomainPrefix
+      UserPoolId: !Ref UserPool
+      ManagedLoginVersion: 2
+
+  ManagedLoginBranding:
+    Type: AWS::Cognito::ManagedLoginBranding
+    DependsOn: UserPoolDomain
+    Properties:
+      UserPoolId: !Ref UserPool
+      ClientId: !Ref SpaClient
+      UseCognitoProvidedValues: true
+
+Outputs:
+  UserPoolId:
+    Value: !Ref UserPool
+
+  UserPoolClientId:
+    Value: !Ref SpaClient
+
+  CognitoDomain:
+    Value: !Sub "https://${CognitoDomainPrefix}.auth.${AWS::Region}.amazoncognito.com"
+
+  Issuer:
+    Value: !Sub "https://cognito-idp.${AWS::Region}.amazonaws.com/${UserPool}"
+
+  CallbackUrl:
+    Value: !Ref CallbackUrl
+
+  LogoutUrl:
+    Value: !Ref LogoutUrl
+
+  GoogleRedirectUrl:
+    Value: !Sub "https://${CognitoDomainPrefix}.auth.${AWS::Region}.amazoncognito.com/oauth2/idpresponse"

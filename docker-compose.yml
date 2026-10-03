@@ -46,6 +46,11 @@ services:
       context: ./frontend
       args:
         NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000}
+        NEXT_PUBLIC_COGNITO_REGION: ${COGNITO_REGION:-us-east-1}
+        NEXT_PUBLIC_COGNITO_USER_POOL_ID: ${COGNITO_USER_POOL_ID:-}
+        NEXT_PUBLIC_COGNITO_CLIENT_ID: ${COGNITO_CLIENT_ID:-}
+        NEXT_PUBLIC_COGNITO_DOMAIN: ${COGNITO_DOMAIN:-}
+        NEXT_PUBLIC_APP_URL: ${FRONTEND_URL:-http://localhost:3000}
     restart: unless-stopped
     depends_on:
       backend:

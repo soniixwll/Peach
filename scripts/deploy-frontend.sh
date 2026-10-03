@@ -67,6 +67,15 @@ log "building against ${API_URL}"
 [[ "${API_URL}" == https://* ]] \
   || die "BACKEND_URL must be https:// - browsers block an HTTPS page calling HTTP"
 
+for var in COGNITO_REGION COGNITO_USER_POOL_ID COGNITO_CLIENT_ID COGNITO_DOMAIN; do
+  [[ -n "${!var:-}" ]] || die "${var} is not set in .env - run make deploy-auth first"
+done
+
+AUTH_CALLBACK_URL="${AUTH_CALLBACK_URL:-https://www.sofia-peach.pp.ua/login/}"
+[[ "${AUTH_CALLBACK_URL}" == https://*/login/ ]] \
+  || die "AUTH_CALLBACK_URL must be an HTTPS URL ending in /login/"
+APP_URL="${AUTH_CALLBACK_URL%/login/}"
+
 # --- infrastructure ---------------------------------------------------------
 
 if ! aws cloudformation describe-stacks --stack-name "${STACK_NAME}" >/dev/null 2>&1; then
@@ -106,7 +115,15 @@ log "installing dependencies"
 
 log "building the static export"
 rm -rf "${APP}/out"
-(cd "${APP}" && NEXT_OUTPUT=export NEXT_PUBLIC_API_URL="${API_URL}" "${PM[@]}" build)
+(cd "${APP}" && \
+  NEXT_OUTPUT=export \
+  NEXT_PUBLIC_API_URL="${API_URL}" \
+  NEXT_PUBLIC_COGNITO_REGION="${COGNITO_REGION}" \
+  NEXT_PUBLIC_COGNITO_USER_POOL_ID="${COGNITO_USER_POOL_ID}" \
+  NEXT_PUBLIC_COGNITO_CLIENT_ID="${COGNITO_CLIENT_ID}" \
+  NEXT_PUBLIC_COGNITO_DOMAIN="${COGNITO_DOMAIN}" \
+  NEXT_PUBLIC_APP_URL="${APP_URL}" \
+  "${PM[@]}" build)
 [[ -f "${APP}/out/index.html" ]] || die "the export produced no out/index.html"
 
 # --- upload -----------------------------------------------------------------

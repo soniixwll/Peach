@@ -1,6 +1,6 @@
 COMPOSE := docker compose
 
-.PHONY: help up down build logs ps migrate revision test test-backend test-frontend lint fmt clean shell-backend shell-db deploy-backend destroy-backend logs-backend migrate-backend cert domain deploy-frontend destroy-frontend github-role
+.PHONY: help up down build logs ps migrate revision test test-backend test-frontend lint fmt clean shell-backend shell-db deploy-auth deploy-backend destroy-backend logs-backend migrate-backend cert domain deploy-frontend destroy-frontend github-role
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-16s\033[0m %s\n", $$1, $$2}'
@@ -50,6 +50,9 @@ shell-backend: ## Shell into the backend container
 
 shell-db: ## psql into the database
 	$(COMPOSE) exec db psql -U $${POSTGRES_USER:-peach} -d $${POSTGRES_DB:-peach}
+
+deploy-auth: ## Create/update Cognito email/password + Google Managed Login
+	./scripts/deploy-auth.sh
 
 deploy-backend: ## Build + push the image, roll the Lambda (function URL + Aurora), migrate, write BACKEND_URL to .env
 	./scripts/deploy-backend.sh
