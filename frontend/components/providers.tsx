@@ -4,7 +4,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useState } from "react";
 import { AuthProvider } from "react-oidc-context";
 
-import { oidcConfig } from "@/lib/auth";
+import { onSigninCallback, userManager } from "@/lib/auth";
 
 export function Providers({ children }: { children: React.ReactNode }) {
   const [queryClient] = useState(
@@ -17,7 +17,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
   );
 
   return (
-    <AuthProvider {...oidcConfig}>
+    <AuthProvider userManager={userManager} onSigninCallback={onSigninCallback}>
       <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
     </AuthProvider>
   );

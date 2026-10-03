@@ -16,16 +16,16 @@ describe("Cognito configuration", () => {
     );
     vi.stubEnv("NEXT_PUBLIC_APP_URL", "https://www.example.com");
 
-    const { authIsConfigured, cognitoLogoutUrl, loginUrl, oidcConfig } =
+    const { authIsConfigured, cognitoLogoutUrl, loginUrl, oidcSettings } =
       await import("@/lib/auth");
 
     expect(authIsConfigured).toBe(true);
-    expect(oidcConfig.authority).toBe(
+    expect(oidcSettings.authority).toBe(
       "https://cognito-idp.us-east-1.amazonaws.com/us-east-1_example",
     );
-    expect(oidcConfig.client_id).toBe("public-client-id");
-    expect(oidcConfig.response_type).toBe("code");
-    expect(oidcConfig.scope).toBe("openid email profile");
+    expect(oidcSettings.client_id).toBe("public-client-id");
+    expect(oidcSettings.response_type).toBe("code");
+    expect(oidcSettings.scope).toBe("openid email profile");
     expect(loginUrl).toBe("https://www.example.com/login/");
 
     const logoutUrl = new URL(cognitoLogoutUrl());

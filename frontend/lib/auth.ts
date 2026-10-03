@@ -1,4 +1,4 @@
-import type { AuthProviderProps } from "react-oidc-context";
+import { UserManager, type UserManagerSettings } from "oidc-client-ts";
 
 const region = process.env.NEXT_PUBLIC_COGNITO_REGION ?? "us-east-1";
 const userPoolId = process.env.NEXT_PUBLIC_COGNITO_USER_POOL_ID ?? "missing";
@@ -18,16 +18,19 @@ export const authIsConfigured =
 
 export const loginUrl = `${appUrl}/login/`;
 
-export const oidcConfig = {
+export const oidcSettings = {
   authority: `https://cognito-idp.${region}.amazonaws.com/${userPoolId}`,
   client_id: clientId,
   redirect_uri: loginUrl,
   response_type: "code",
   scope: "openid email profile",
-  onSigninCallback: () => {
-    window.location.replace("/");
-  },
-} satisfies AuthProviderProps;
+} satisfies UserManagerSettings;
+
+export const userManager = new UserManager(oidcSettings);
+
+export function onSigninCallback() {
+  window.location.replace("/");
+}
 
 export function cognitoLogoutUrl() {
   const query = new URLSearchParams({

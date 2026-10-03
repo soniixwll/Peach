@@ -118,6 +118,19 @@ Parameters:
     Default: "*"
     Description: Comma-separated browser origins; set this to the deployed frontend URL.
 
+  CognitoIssuer:
+    Type: String
+    Description: Exact issuer URL of the Cognito user pool that signs API access tokens.
+
+  CognitoClientId:
+    Type: String
+    Description: Public SPA app client ID expected in the access token client_id claim.
+
+  CognitoJwksJson:
+    Type: String
+    NoEcho: true
+    Description: Minified public Cognito JWKS snapshot fetched by deploy-backend.
+
   LogRetentionDays:
     Type: Number
     Default: 7
@@ -279,6 +292,9 @@ Resources:
           APP_ENV: !Ref AppEnv
           LOG_LEVEL: !Ref LogLevel
           CORS_ORIGINS: !Ref CorsOrigins
+          COGNITO_ISSUER: !Ref CognitoIssuer
+          COGNITO_CLIENT_ID: !Ref CognitoClientId
+          COGNITO_JWKS_JSON: !Ref CognitoJwksJson
           # No pool: warm but idle environments would keep connections open,
           # and Aurora only pauses once there are none.
           DB_POOLING: "false"

@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import { userManager } from "@/lib/auth";
+
 /** Browser code must reach the API through the published port; server components
  *  resolve the Compose service name instead. */
 export function apiBaseUrl(): string {
@@ -19,20 +21,23 @@ export class ApiError extends Error {
   }
 }
 
-async function request<T>(
+export async function request<T>(
   path: string,
   schema: z.ZodType<T>,
   init?: RequestInit,
 ): Promise<T> {
   let response: Response;
   try {
+    const user = await userManager.getUser();
+    const headers = new Headers(init?.headers);
+    headers.set("Content-Type", "application/json");
+    if (user?.access_token) {
+      headers.set("Authorization", `Bearer ${user.access_token}`);
+    }
     response = await fetch(`${apiBaseUrl()}${path}`, {
       ...init,
       cache: "no-store",
-      headers: {
-        "Content-Type": "application/json",
-        ...(init?.headers ?? {}),
-      },
+      headers,
     });
   } catch {
     throw new ApiError(0, "Could not reach the API");

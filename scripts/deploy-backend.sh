@@ -80,7 +80,7 @@ PY
 
 # --- preflight --------------------------------------------------------------
 
-for tool in aws docker python3; do
+for tool in aws curl docker python3; do
   command -v "${tool}" >/dev/null 2>&1 || die "${tool} is required but not installed"
 done
 docker info >/dev/null 2>&1 || die "docker daemon is not running"
@@ -89,6 +89,39 @@ ACCOUNT_ID="$(aws sts get-caller-identity --query Account --output text 2>/dev/n
   || die "no usable AWS credentials - set AWS_PROFILE or the AWS_* keys in .env"
 CALLER="$(aws sts get-caller-identity --query Arn --output text)"
 log "account ${ACCOUNT_ID} in ${AWS_REGION} as ${CALLER}"
+
+# Cognito's JWKS endpoint is public, but the VPC-attached Lambda has no NAT.
+# Snapshot the public signing keys here and inject them into the function so
+# token verification never needs runtime internet access.
+AUTH_STACK_NAME="${AUTH_STACK_NAME:-${PROJECT_NAME}-auth}"
+auth_output() {
+  aws cloudformation describe-stacks --stack-name "${AUTH_STACK_NAME}" \
+    --query "Stacks[0].Outputs[?OutputKey=='$1'].OutputValue" --output text
+}
+
+COGNITO_USER_POOL_ID="$(auth_output UserPoolId)"
+COGNITO_CLIENT_ID="$(auth_output UserPoolClientId)"
+COGNITO_ISSUER="$(auth_output Issuer)"
+[[ -n "${COGNITO_USER_POOL_ID}" && "${COGNITO_USER_POOL_ID}" != "None" ]] \
+  || die "${AUTH_STACK_NAME} has no UserPoolId output - run make deploy-auth first"
+[[ -n "${COGNITO_CLIENT_ID}" && "${COGNITO_CLIENT_ID}" != "None" ]] \
+  || die "${AUTH_STACK_NAME} has no UserPoolClientId output"
+[[ -n "${COGNITO_ISSUER}" && "${COGNITO_ISSUER}" != "None" ]] \
+  || die "${AUTH_STACK_NAME} has no Issuer output"
+
+JWKS_URL="${COGNITO_ISSUER}/.well-known/jwks.json"
+COGNITO_JWKS_JSON="$(curl -fsS --max-time 30 "${JWKS_URL}" | python3 -c '
+import json, sys
+document = json.load(sys.stdin)
+keys = document.get("keys") if isinstance(document, dict) else None
+if not isinstance(keys, list) or not keys:
+    raise SystemExit("Cognito JWKS contains no keys")
+for key in keys:
+    if not isinstance(key, dict) or not isinstance(key.get("kid"), str):
+        raise SystemExit("Cognito JWKS contains an invalid key")
+print(json.dumps(document, separators=(",", ":")))
+')" || die "could not download and validate Cognito JWKS"
+log "loaded Cognito public signing-key snapshot from ${AUTH_STACK_NAME}"
 
 # --- network ----------------------------------------------------------------
 
@@ -192,6 +225,34 @@ alphabet = string.ascii_letters + string.digits + "-_.~"
 print("".join(secrets.choice(alphabet) for _ in range(40)))')"
 fi
 
+# Lambda limits the combined size of all environment variable names and values
+# to 4 KB. Reserve 512 bytes for the CloudFormation-composed database URL,
+# whose Aurora hostname is not known until stack evaluation.
+ENVIRONMENT_BYTES="$(
+  COGNITO_ISSUER="${COGNITO_ISSUER}" \
+  COGNITO_CLIENT_ID="${COGNITO_CLIENT_ID}" \
+  COGNITO_JWKS_JSON="${COGNITO_JWKS_JSON}" \
+  APP_ENV_VALUE="${APP_ENV_AWS:-production}" \
+  LOG_LEVEL_VALUE="${LOG_LEVEL:-info}" \
+  CORS_VALUE="${API_CORS_ORIGINS:-*}" \
+  python3 -c '
+import os
+values = {
+    "APP_ENV": os.environ["APP_ENV_VALUE"],
+    "LOG_LEVEL": os.environ["LOG_LEVEL_VALUE"],
+    "CORS_ORIGINS": os.environ["CORS_VALUE"],
+    "DB_POOLING": "false",
+    "COGNITO_ISSUER": os.environ["COGNITO_ISSUER"],
+    "COGNITO_CLIENT_ID": os.environ["COGNITO_CLIENT_ID"],
+    "COGNITO_JWKS_JSON": os.environ["COGNITO_JWKS_JSON"],
+}
+print(sum(len(key.encode()) + len(value.encode()) for key, value in values.items()) + 512)
+'
+)"
+(( ENVIRONMENT_BYTES <= 4096 )) \
+  || die "Lambda environment would exceed 4096 bytes with the Cognito JWKS snapshot"
+log "Lambda environment-size check passed"
+
 # --- deploy -----------------------------------------------------------------
 
 # Parameters go through a 0600 file rather than argv, so the password never
@@ -218,6 +279,9 @@ DB_SECONDS_UNTIL_AUTO_PAUSE="${DB_SECONDS_UNTIL_AUTO_PAUSE:-}" \
 APP_ENV="${APP_ENV_AWS:-production}" \
 LOG_LEVEL="${LOG_LEVEL:-info}" \
 CORS_ORIGINS="${API_CORS_ORIGINS:-}" \
+COGNITO_ISSUER="${COGNITO_ISSUER}" \
+COGNITO_CLIENT_ID="${COGNITO_CLIENT_ID}" \
+COGNITO_JWKS_JSON="${COGNITO_JWKS_JSON}" \
 python3 - "${PARAMS_FILE}" <<'PY'
 import json, os, sys
 
@@ -239,6 +303,9 @@ params = {
     "AppEnv": os.environ["APP_ENV"],
     "LogLevel": os.environ["LOG_LEVEL"],
     "CorsOrigins": os.environ["CORS_ORIGINS"],
+    "CognitoIssuer": os.environ["COGNITO_ISSUER"],
+    "CognitoClientId": os.environ["COGNITO_CLIENT_ID"],
+    "CognitoJwksJson": os.environ["COGNITO_JWKS_JSON"],
 }
 # An empty value means "leave this alone": CloudFormation reuses the stack's
 # existing value for any parameter the deploy does not mention, and falls back

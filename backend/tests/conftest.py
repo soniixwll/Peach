@@ -1,8 +1,14 @@
+import json
 import os
+import time
 from collections.abc import AsyncIterator
+from typing import Any
 
+import jwt
 import pytest
+from cryptography.hazmat.primitives.asymmetric import rsa
 from httpx import ASGITransport, AsyncClient
+from jwt.algorithms import RSAAlgorithm
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
 
@@ -25,8 +31,49 @@ def _test_database_url() -> str:
 os.environ["APP_ENV"] = "test"
 os.environ["DATABASE_URL"] = _test_database_url()
 
+TEST_ISSUER = "https://cognito-idp.us-east-1.amazonaws.com/us-east-1_test"
+TEST_CLIENT_ID = "test-public-client"
+TEST_KID = "test-access-key"
+TEST_PRIVATE_KEY = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+TEST_JWK = json.loads(RSAAlgorithm.to_jwk(TEST_PRIVATE_KEY.public_key()))
+TEST_JWK.update({"kid": TEST_KID, "alg": "RS256", "use": "sig"})
+TEST_JWKS_JSON = json.dumps({"keys": [TEST_JWK]}, separators=(",", ":"))
+os.environ["COGNITO_ISSUER"] = TEST_ISSUER
+os.environ["COGNITO_CLIENT_ID"] = TEST_CLIENT_ID
+os.environ["COGNITO_JWKS_JSON"] = TEST_JWKS_JSON
+
 from app.db import Base, get_session  # noqa: E402
 from app.main import create_app  # noqa: E402
+
+
+@pytest.fixture
+def token_factory():
+    def _make_token(
+        *,
+        claims: dict[str, Any] | None = None,
+        kid: str = TEST_KID,
+        private_key=TEST_PRIVATE_KEY,
+    ) -> str:
+        now = int(time.time())
+        payload: dict[str, Any] = {
+            "sub": "test-user",
+            "iss": TEST_ISSUER,
+            "client_id": TEST_CLIENT_ID,
+            "token_use": "access",
+            "scope": "openid email profile",
+            "iat": now,
+            "exp": now + 300,
+        }
+        payload.update(claims or {})
+        payload = {key: value for key, value in payload.items() if value is not None}
+        return jwt.encode(payload, private_key, algorithm="RS256", headers={"kid": kid})
+
+    return _make_token
+
+
+@pytest.fixture
+def access_token(token_factory) -> str:
+    return token_factory()
 
 
 async def _ensure_test_database(url: str) -> None:
@@ -72,7 +119,7 @@ async def session(engine) -> AsyncIterator[AsyncSession]:
 
 
 @pytest.fixture
-async def client(session: AsyncSession) -> AsyncIterator[AsyncClient]:
+async def anonymous_client(session: AsyncSession) -> AsyncIterator[AsyncClient]:
     app = create_app()
 
     async def _override() -> AsyncIterator[AsyncSession]:
@@ -83,3 +130,9 @@ async def client(session: AsyncSession) -> AsyncIterator[AsyncClient]:
     async with AsyncClient(transport=transport, base_url="http://test") as client:
         yield client
     app.dependency_overrides.clear()
+
+
+@pytest.fixture
+async def client(anonymous_client: AsyncClient, access_token: str) -> AsyncIterator[AsyncClient]:
+    anonymous_client.headers["Authorization"] = f"Bearer {access_token}"
+    yield anonymous_client
