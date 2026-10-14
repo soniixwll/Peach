@@ -1,6 +1,6 @@
 COMPOSE := docker compose
 
-.PHONY: help up down build logs ps migrate revision test test-backend test-frontend lint fmt clean shell-backend shell-db deploy-auth deploy-backend destroy-backend logs-backend migrate-backend cert domain deploy-frontend destroy-frontend github-role
+.PHONY: help up down build logs ps migrate revision test test-backend test-frontend lint fmt clean shell-backend shell-db deploy-auth deploy-backend destroy-backend logs-backend migrate-backend package-report-mailer deploy-reports seed-report-meetings report-now cert domain deploy-frontend destroy-frontend github-role
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-16s\033[0m %s\n", $$1, $$2}'
@@ -66,6 +66,18 @@ logs-backend: ## Tail the deployed backend's CloudWatch logs
 migrate-backend: ## Re-run migrations on the deployed backend (deploy-backend already does)
 	aws lambda invoke --function-name $${PROJECT_NAME:-peach}-backend \
 		--cli-binary-format raw-in-base64-out --payload '{"action":"migrate"}' /dev/stdout
+
+package-report-mailer: ## Build the lightweight mailer Lambda ZIP locally
+	./scripts/package-report-mailer.sh
+
+deploy-reports: ## Deploy reports infrastructure; requires REPORT_RECIPIENT_EMAIL
+	./scripts/deploy-reports.sh
+
+seed-report-meetings: ## Seed deterministic samples: make seed-report-meetings WEEK=2026-W40
+	WEEK="$(WEEK)" ./scripts/seed-report-meetings.sh
+
+report-now: ## Queue a report for an ISO week: make report-now WEEK=2026-W40
+	WEEK="$(WEEK)" ./scripts/report-now.sh
 
 cert: ## Request + DNS-validate a us-east-1 certificate for the frontend: make cert DOMAIN=app.example.com
 	./scripts/domain-frontend.sh cert

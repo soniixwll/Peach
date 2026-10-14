@@ -1,13 +1,17 @@
 """AWS Lambda entry point: the FastAPI app behind a Lambda function URL.
 
-Two kinds of event arrive here:
+Three kinds of event arrive here:
 
 - HTTP requests from the function URL (payload format 2.0), handed to the ASGI
   app through Mangum.
 - ``{"action": "migrate"}``, sent by scripts/deploy-backend.sh through a direct
-  invoke after every deploy. A function URL request can never produce this
-  shape - its body is nested under ``body``, not at the top level - so the
-  migration path is reachable only by someone allowed to call lambda:Invoke.
+  invoke after every deploy.
+- ``{"action": "seed_report_meetings", "week": "YYYY-Www"}``, sent only by
+  the administrative seed script.
+
+A function URL request cannot produce either administrative shape - its body
+is nested under ``body``, not at the top level - so those paths are reachable
+only by a principal allowed to call ``lambda:InvokeFunction`` directly.
 """
 
 import asyncio
@@ -41,8 +45,28 @@ def _migrate() -> dict[str, str]:
     return {"status": "ok", "migrated_to": "head"}
 
 
+def _seed_report_meetings(week: object) -> dict[str, Any]:
+    from app.reports.seed import seed_report_meetings
+
+    if not isinstance(week, str):
+        raise ValueError("seed_report_meetings requires an ISO week string")
+    asyncio.set_event_loop(_loop)
+    result = _loop.run_until_complete(seed_report_meetings(week))
+    logger.info(
+        "report meeting seed completed",
+        extra={
+            "week": result["week"],
+            "inserted": result["inserted"],
+            "skipped": result["skipped"],
+        },
+    )
+    return {"status": "ok", **result}
+
+
 def handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
     if event.get("action") == "migrate":
         return _migrate()
+    if event.get("action") == "seed_report_meetings":
+        return _seed_report_meetings(event.get("week"))
     asyncio.set_event_loop(_loop)
     return _asgi(event, context)

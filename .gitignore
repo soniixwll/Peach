@@ -8,6 +8,7 @@ venv/
 .mypy_cache/
 htmlcov/
 .coverage
+dist/
 
 # --- node ---
 node_modules/
