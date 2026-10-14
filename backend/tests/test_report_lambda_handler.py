@@ -98,8 +98,24 @@ def test_trigger_is_logged(
     with caplog.at_level("INFO"):
         lambda_handler.handler({"source": "schedule", "week": "2026-W40"}, None)
 
-    assert "report trigger received" in caplog.messages
+    assert "report-builder triggered trigger=schedule week=2026-W40" in caplog.messages
     assert "weekly report stored" in caplog.messages
+
+
+def test_manual_sqs_trigger_is_logged(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    async def fake_build(week: str) -> bytes:
+        return b"csv"
+
+    monkeypatch.setattr(lambda_handler, "build_weekly_report", fake_build)
+    monkeypatch.setattr(lambda_handler.boto3, "client", lambda service: Mock())
+    monkeypatch.setenv("REPORTS_BUCKET", "test-reports")
+
+    with caplog.at_level("INFO"):
+        lambda_handler.handler(_sqs_event('{"source":"manual","week":"2026-W40"}'), None)
+
+    assert "report-builder triggered trigger=sqs week=2026-W40" in caplog.messages
 
 
 def test_upload_failure_is_logged_and_propagated(

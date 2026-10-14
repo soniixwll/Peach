@@ -109,5 +109,5 @@ def test_s3_trigger_and_success_are_logged(
     with caplog.at_level("INFO"):
         mailer_handler.handler(_s3_event(), None)
 
-    assert "report mailer trigger received" in caplog.messages
+    assert "report-mailer triggered trigger=s3 key=reports/2026-W40.csv" in caplog.messages
     assert "weekly report email sent" in caplog.messages

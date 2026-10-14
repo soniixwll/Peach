@@ -11,6 +11,7 @@ import boto3
 from app.reports.weekly import build_weekly_report
 
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
 
 
 @dataclass(frozen=True)
@@ -81,10 +82,12 @@ async def _build_and_upload(request: ReportRequest, bucket: str, s3_client: Any)
 
 
 def handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
-    logger.info("report invocation received")
     request = _parse_event(event)
+    trigger = "schedule" if request.source == "schedule" else "sqs"
     logger.info(
-        "report trigger received",
+        "report-builder triggered trigger=%s week=%s",
+        trigger,
+        request.week,
         extra={"trigger_source": request.source, "requested_week": request.week},
     )
     bucket = os.environ.get("REPORTS_BUCKET")

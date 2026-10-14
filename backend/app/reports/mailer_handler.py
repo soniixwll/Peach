@@ -10,6 +10,7 @@ from urllib.parse import unquote_plus
 import boto3
 
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
 
 _REPORT_KEY = re.compile(r"^reports/(?P<week>\d{4}-W\d{2})\.csv$")
 
@@ -74,10 +75,11 @@ def _build_email(
 
 
 def handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
-    logger.info("report mailer invocation received")
     report = _parse_s3_event(event)
     logger.info(
-        "report mailer trigger received", extra={"trigger_source": "s3", "week": report.week}
+        "report-mailer triggered trigger=s3 key=%s",
+        report.key,
+        extra={"trigger_source": "s3", "week": report.week},
     )
 
     sender = os.environ.get("REPORT_SENDER_EMAIL")
