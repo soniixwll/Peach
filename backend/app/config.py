@@ -18,6 +18,9 @@ class Settings(BaseSettings):
     cognito_client_id: str = ""
     cognito_jwks_json: str = '{"keys":[]}'
 
+    parser_model: str = "us.amazon.nova-micro-v1:0"
+    parser_region: str = "us-east-1"
+
     database_url: str = "postgresql+asyncpg://peach:peach@db:5432/peach"
     # Off on Lambda: a warm but idle execution environment would otherwise hold
     # pooled connections open, and Aurora Serverless only pauses at zero.

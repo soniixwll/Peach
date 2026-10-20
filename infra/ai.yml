@@ -1,0 +1,177 @@
+AWSTemplateFormatVersion: "2010-09-09"
+
+Description: Peach agenda parsing with Amazon Nova through Bedrock Converse.
+
+Parameters:
+  ProjectName:
+    Type: String
+    Default: peach
+  BackendImageUri:
+    Type: String
+  Architecture:
+    Type: String
+    Default: arm64
+    AllowedValues: [arm64, x86_64]
+  ParserModel:
+    Type: String
+    Default: us.amazon.nova-micro-v1:0
+  AllowedOrigin:
+    Type: String
+    Default: https://www.sofia-peach.pp.ua
+  CognitoIssuer:
+    Type: String
+  CognitoClientId:
+    Type: String
+  CognitoJwksJson:
+    Type: String
+    NoEcho: true
+  BudgetNotificationEmail:
+    Type: String
+    AllowedPattern: "^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$"
+  LogRetentionDays:
+    Type: Number
+    Default: 7
+
+Resources:
+  AgendaParserLogGroup:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      LogGroupName: !Sub "/aws/lambda/${ProjectName}-agenda-parser"
+      RetentionInDays: !Ref LogRetentionDays
+      Tags:
+        - Key: PROJECT_NAME
+          Value: !Ref ProjectName
+
+  AgendaParserRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: InvokeNovaMicro
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - bedrock:GetInferenceProfile
+                  - bedrock:InvokeModel
+                Resource:
+                  - !Sub "arn:${AWS::Partition}:bedrock:us-east-1:${AWS::AccountId}:inference-profile/us.amazon.nova-micro-v1:0"
+                  - !Sub "arn:${AWS::Partition}:bedrock:us-east-1::foundation-model/amazon.nova-micro-v1:0"
+                  - !Sub "arn:${AWS::Partition}:bedrock:us-east-2::foundation-model/amazon.nova-micro-v1:0"
+                  - !Sub "arn:${AWS::Partition}:bedrock:us-west-2::foundation-model/amazon.nova-micro-v1:0"
+        - PolicyName: WriteParserLogs
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: !Sub >-
+                  arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${ProjectName}-agenda-parser:*
+      Tags:
+        - Key: PROJECT_NAME
+          Value: !Ref ProjectName
+
+  AgendaParserFunction:
+    Type: AWS::Lambda::Function
+    DependsOn: AgendaParserLogGroup
+    Properties:
+      FunctionName: !Sub "${ProjectName}-agenda-parser"
+      Description: Parse pasted agendas with Amazon Nova for human review
+      PackageType: Image
+      Architectures: [!Ref Architecture]
+      MemorySize: 512
+      Timeout: 30
+      Role: !GetAtt AgendaParserRole.Arn
+      Code:
+        ImageUri: !Ref BackendImageUri
+      ImageConfig:
+        Command: [app.ai.lambda_handler.handler]
+      Environment:
+        Variables:
+          APP_ENV: production
+          PARSER_MODEL: !Ref ParserModel
+          PARSER_REGION: us-east-1
+          COGNITO_ISSUER: !Ref CognitoIssuer
+          COGNITO_CLIENT_ID: !Ref CognitoClientId
+          COGNITO_JWKS_JSON: !Ref CognitoJwksJson
+      Tags:
+        - Key: PROJECT_NAME
+          Value: !Ref ProjectName
+
+  AgendaParserUrl:
+    Type: AWS::Lambda::Url
+    Properties:
+      TargetFunctionArn: !GetAtt AgendaParserFunction.Arn
+      AuthType: NONE
+      InvokeMode: BUFFERED
+      Cors:
+        AllowCredentials: false
+        AllowHeaders: [authorization, content-type]
+        AllowMethods: [POST]
+        AllowOrigins: [!Ref AllowedOrigin]
+        MaxAge: 300
+
+  AgendaParserUrlPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref AgendaParserFunction
+      Action: lambda:InvokeFunctionUrl
+      Principal: "*"
+      FunctionUrlAuthType: NONE
+
+  AgendaParserInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref AgendaParserFunction
+      Action: lambda:InvokeFunction
+      Principal: "*"
+      InvokedViaFunctionUrl: true
+
+  AiMonthlyBudget:
+    Type: AWS::Budgets::Budget
+    Properties:
+      Budget:
+        BudgetName: !Sub "${ProjectName}-ai-monthly-5-usd"
+        BudgetLimit:
+          Amount: 5
+          Unit: USD
+        BudgetType: COST
+        TimeUnit: MONTHLY
+        CostFilters:
+          Service: [Amazon Bedrock]
+      NotificationsWithSubscribers:
+        - Notification:
+            ComparisonOperator: GREATER_THAN
+            NotificationType: ACTUAL
+            Threshold: 80
+            ThresholdType: PERCENTAGE
+          Subscribers:
+            - Address: !Ref BudgetNotificationEmail
+              SubscriptionType: EMAIL
+        - Notification:
+            ComparisonOperator: GREATER_THAN
+            NotificationType: FORECASTED
+            Threshold: 100
+            ThresholdType: PERCENTAGE
+          Subscribers:
+            - Address: !Ref BudgetNotificationEmail
+              SubscriptionType: EMAIL
+
+Outputs:
+  FunctionName:
+    Value: !Ref AgendaParserFunction
+  FunctionUrl:
+    Value: !GetAtt AgendaParserUrl.FunctionUrl
+  Model:
+    Value: !Ref ParserModel

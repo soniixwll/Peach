@@ -90,11 +90,59 @@ export const itemInputSchema = z.object({
   status: itemStatusSchema,
 });
 
+export const agendaItemSchema = z.object({
+  title: z.string(),
+  duration_minutes: z.number().int().positive().nullable().optional(),
+  notes: z.string().nullable().optional(),
+});
+
+export const actionItemSchema = z.object({
+  description: z.string(),
+  owner: z.string().nullable().optional(),
+  due_date: z.string().nullable().optional(),
+});
+
+export const parsedAgendaSchema = z.object({
+  title: z.string(),
+  start_at: z.string(),
+  duration_minutes: z.number().int().positive(),
+  participant_count: z.number().int().nonnegative(),
+  agenda_items: z.array(agendaItemSchema),
+  action_items: z.array(actionItemSchema),
+});
+
+export const parserResponseSchema = z.object({
+  agenda: parsedAgendaSchema,
+  ai_suggestion: parsedAgendaSchema,
+  model: z.string(),
+  prompt_version: z.string(),
+});
+
+export const meetingSchema = parsedAgendaSchema.extend({
+  id: z.string(),
+  ai_suggestion: parsedAgendaSchema.nullable(),
+  ai_model: z.string().nullable(),
+  ai_prompt_version: z.string().nullable(),
+});
+
+export const meetingListSchema = z.object({
+  meetings: z.array(meetingSchema),
+  total: z.number().int(),
+});
+
 export type ItemStatus = z.infer<typeof itemStatusSchema>;
 export type Item = z.infer<typeof itemSchema>;
 export type ItemList = z.infer<typeof itemListSchema>;
 export type Health = z.infer<typeof healthSchema>;
 export type ItemInput = z.infer<typeof itemInputSchema>;
+export type ParsedAgenda = z.infer<typeof parsedAgendaSchema>;
+export type ParserResponse = z.infer<typeof parserResponseSchema>;
+export type Meeting = z.infer<typeof meetingSchema>;
+export type MeetingInput = ParsedAgenda & {
+  ai_suggestion?: ParsedAgenda;
+  ai_model?: string;
+  ai_prompt_version?: string;
+};
 
 /* --- endpoints --- */
 
@@ -123,4 +171,52 @@ export const api = {
 
   deleteItem: (id: string) =>
     request(`/api/v1/items/${id}`, z.undefined(), { method: "DELETE" }),
+
+  listMeetings: () => request("/api/v1/meetings", meetingListSchema),
+
+  createMeeting: (payload: MeetingInput) =>
+    request("/api/v1/meetings", meetingSchema, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
 };
+
+export async function parseAgenda(
+  text: string,
+  signal?: AbortSignal,
+): Promise<ParserResponse> {
+  const parserUrl = process.env.NEXT_PUBLIC_AGENDA_PARSER_URL;
+  if (!parserUrl) throw new ApiError(0, "Agenda parser is not configured");
+  const user = await userManager.getUser();
+  if (!user?.access_token)
+    throw new ApiError(401, "Sign in before parsing an agenda");
+
+  let response: Response;
+  try {
+    response = await fetch(parserUrl, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${user.access_token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        text,
+        today: new Date().toISOString().slice(0, 10),
+        tz: Intl.DateTimeFormat().resolvedOptions().timeZone,
+      }),
+      signal,
+    });
+  } catch (error) {
+    if (error instanceof DOMException && error.name === "AbortError")
+      throw error;
+    throw new ApiError(0, "Could not reach the agenda parser");
+  }
+  if (!response.ok) {
+    const body = await response.json().catch(() => null);
+    throw new ApiError(
+      response.status,
+      body?.detail ?? `Parsing failed (${response.status})`,
+    );
+  }
+  return parserResponseSchema.parse(await response.json());
+}

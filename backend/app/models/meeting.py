@@ -2,6 +2,7 @@ import uuid
 from datetime import datetime
 
 from sqlalchemy import CheckConstraint, DateTime, Integer, String, func
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -22,3 +23,12 @@ class Meeting(Base):
     start_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, index=True)
     duration_minutes: Mapped[int] = mapped_column(Integer, nullable=False)
     participant_count: Mapped[int] = mapped_column(Integer, nullable=False)
+    agenda_items: Mapped[list[dict[str, object]]] = mapped_column(
+        JSONB, nullable=False, server_default="[]"
+    )
+    action_items: Mapped[list[dict[str, object]]] = mapped_column(
+        JSONB, nullable=False, server_default="[]"
+    )
+    ai_suggestion: Mapped[dict[str, object] | None] = mapped_column(JSONB, nullable=True)
+    ai_model: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    ai_prompt_version: Mapped[str | None] = mapped_column(String(32), nullable=True)

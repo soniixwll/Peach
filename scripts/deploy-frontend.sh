@@ -75,6 +75,8 @@ AUTH_CALLBACK_URL="${AUTH_CALLBACK_URL:-https://www.sofia-peach.pp.ua/login/}"
 [[ "${AUTH_CALLBACK_URL}" == https://*/login/ ]] \
   || die "AUTH_CALLBACK_URL must be an HTTPS URL ending in /login/"
 APP_URL="${AUTH_CALLBACK_URL%/login/}"
+AGENDA_PARSER_URL="${AGENDA_PARSER_URL:-}"
+[[ -n "${AGENDA_PARSER_URL}" ]] || die "AGENDA_PARSER_URL is not set in .env - run make deploy-ai first"
 
 # --- infrastructure ---------------------------------------------------------
 
@@ -123,6 +125,7 @@ rm -rf "${APP}/out"
   NEXT_PUBLIC_COGNITO_CLIENT_ID="${COGNITO_CLIENT_ID}" \
   NEXT_PUBLIC_COGNITO_DOMAIN="${COGNITO_DOMAIN}" \
   NEXT_PUBLIC_APP_URL="${APP_URL}" \
+  NEXT_PUBLIC_AGENDA_PARSER_URL="${AGENDA_PARSER_URL}" \
   "${PM[@]}" build)
 [[ -f "${APP}/out/index.html" ]] || die "the export produced no out/index.html"
 

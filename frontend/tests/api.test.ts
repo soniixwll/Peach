@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { ApiError, api, itemListSchema, request } from "@/lib/api";
+import { ApiError, api, itemListSchema, parseAgenda, request } from "@/lib/api";
 import { userManager } from "@/lib/auth";
 
 function mockFetch(body: unknown, init: { status?: number } = {}) {
@@ -83,5 +83,44 @@ describe("api", () => {
       throw new TypeError("failed");
     });
     await expect(api.listItems()).rejects.toBeInstanceOf(ApiError);
+  });
+
+  it("uses only the access token for the isolated agenda parser", async () => {
+    process.env.NEXT_PUBLIC_AGENDA_PARSER_URL = "https://parser.example.test/";
+    vi.spyOn(userManager, "getUser").mockResolvedValue({
+      access_token: "parser-access-token",
+      id_token: "do-not-use-this-token",
+    } as Awaited<ReturnType<typeof userManager.getUser>>);
+    const agenda = {
+      title: "Planning",
+      start_at: "2026-10-21T10:00:00+03:00",
+      duration_minutes: 60,
+      participant_count: 4,
+      agenda_items: [],
+      action_items: [],
+    };
+    const spy = mockFetch({
+      agenda,
+      ai_suggestion: agenda,
+      model: "us.amazon.nova-micro-v1:0",
+      prompt_version: "agenda-v1",
+    });
+
+    await parseAgenda("Planning tomorrow");
+
+    expect(spy.mock.calls[0][0]).toBe("https://parser.example.test/");
+    const headers = spy.mock.calls[0][1]?.headers as Record<string, string>;
+    expect(headers.Authorization).toBe("Bearer parser-access-token");
+    expect(JSON.stringify(spy.mock.calls[0])).not.toContain(
+      "do-not-use-this-token",
+    );
+  });
+
+  it("does not call the parser without an access token", async () => {
+    process.env.NEXT_PUBLIC_AGENDA_PARSER_URL = "https://parser.example.test/";
+    vi.spyOn(userManager, "getUser").mockResolvedValue(null);
+    const spy = vi.spyOn(globalThis, "fetch");
+    await expect(parseAgenda("Agenda")).rejects.toMatchObject({ status: 401 });
+    expect(spy).not.toHaveBeenCalled();
   });
 });

@@ -1,6 +1,6 @@
 COMPOSE := docker compose
 
-.PHONY: help up down build logs ps migrate revision test test-backend test-frontend lint fmt clean shell-backend shell-db deploy-auth deploy-backend destroy-backend logs-backend migrate-backend package-report-mailer deploy-reports seed-report-meetings report-now cert domain deploy-frontend destroy-frontend github-role
+.PHONY: help up down build logs ps migrate revision test test-backend test-frontend lint fmt clean shell-backend shell-db deploy-auth deploy-backend destroy-backend logs-backend migrate-backend package-report-mailer deploy-reports seed-report-meetings report-now llm-hello parse deploy-ai cert domain deploy-frontend destroy-frontend github-role
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-16s\033[0m %s\n", $$1, $$2}'
@@ -78,6 +78,16 @@ seed-report-meetings: ## Seed deterministic samples: make seed-report-meetings W
 
 report-now: ## Queue a report for an ISO week: make report-now WEEK=2026-W40
 	WEEK="$(WEEK)" ./scripts/report-now.sh
+
+llm-hello: ## Verify Amazon Nova access through Bedrock Converse
+	cd backend && AWS_REGION=us-east-1 uv run python -m app.ai.cli hello
+
+parse: ## Parse text with Nova: make parse TEXT="Team sync tomorrow at 10"
+	@test -n "$(TEXT)" || (echo 'TEXT is required' >&2; exit 2)
+	cd backend && AWS_REGION=us-east-1 uv run python -m app.ai.cli parse --text "$(TEXT)"
+
+deploy-ai: ## Deploy the isolated Nova agenda-parser Lambda and $5 budget
+	./scripts/deploy-ai.sh
 
 cert: ## Request + DNS-validate a us-east-1 certificate for the frontend: make cert DOMAIN=app.example.com
 	./scripts/domain-frontend.sh cert

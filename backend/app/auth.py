@@ -53,8 +53,14 @@ def require_access_token(
     if credentials is None or credentials.scheme.lower() != "bearer":
         raise _unauthorized()
 
+    return verify_access_token(credentials.credentials, settings)
+
+
+def verify_access_token(token: str, settings: Settings) -> dict[str, Any]:
+    """Verify a raw Cognito access token for non-FastAPI Lambda handlers."""
+
     try:
-        header = jwt.get_unverified_header(credentials.credentials)
+        header = jwt.get_unverified_header(token)
         if header.get("alg") != "RS256" or not isinstance(header.get("kid"), str):
             raise _unauthorized()
 
@@ -63,7 +69,7 @@ def require_access_token(
             raise _unauthorized()
 
         claims: dict[str, Any] = jwt.decode(
-            credentials.credentials,
+            token,
             key=key,
             algorithms=["RS256"],
             issuer=settings.cognito_issuer,
