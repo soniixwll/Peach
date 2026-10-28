@@ -93,6 +93,10 @@ resource "aws_budgets_budget" "ai_monthly" {
   limit_unit   = "USD"
   time_unit    = "MONTHLY"
 
+  tags = {
+    PROJECT_NAME = var.project_name
+  }
+
   cost_filter {
     name   = "Service"
     values = ["Amazon Bedrock"]

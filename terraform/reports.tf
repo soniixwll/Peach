@@ -168,6 +168,9 @@ resource "aws_lambda_function" "report_builder" {
 
   lifecycle {
     prevent_destroy = true
+
+    # CloudFormation resolved this dynamic reference before configuring Lambda.
+    ignore_changes = [environment[0].variables["DATABASE_URL"]]
   }
 }
 
@@ -195,10 +198,11 @@ resource "aws_scheduler_schedule" "weekly_report" {
 }
 
 resource "aws_lambda_event_source_mapping" "report_builder" {
-  event_source_arn = aws_sqs_queue.reports.arn
-  function_name    = aws_lambda_function.report_builder.arn
-  batch_size       = 1
-  enabled          = true
+  event_source_arn                   = aws_sqs_queue.reports.arn
+  function_name                      = aws_lambda_function.report_builder.arn
+  batch_size                         = 1
+  maximum_batching_window_in_seconds = 0
+  enabled                            = true
 
   lifecycle {
     prevent_destroy = true
