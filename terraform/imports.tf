@@ -22,7 +22,7 @@ import {
 
 import {
   to = aws_cognito_managed_login_branding.login
-  id = "cbcd2ba0-eef1-4bce-b8d4-8857db5d9095|us-east-1_0aVezPaE9|753rah2if6mt31ge63un1uuhtt"
+  id = "us-east-1_0aVezPaE9,cbcd2ba0-eef1-4bce-b8d4-8857db5d9095"
 }
 
 import {
