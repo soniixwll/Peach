@@ -1,0 +1,7 @@
+# Keep secrets out of tfvars. Supply required sensitive values only through the
+# TF_VAR_google_client_id, TF_VAR_google_client_secret,
+# TF_VAR_report_recipient_email, TF_VAR_cognito_jwks_json, and
+# TF_VAR_ai_budget_notification_email environment variables.
+
+# Non-sensitive overrides normally are not needed because defaults model the
+# currently deployed infrastructure.
