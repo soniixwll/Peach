@@ -15,6 +15,11 @@ resource "aws_iam_role" "report_mailer" {
   tags = {
     PROJECT_NAME = var.project_name
   }
+
+  lifecycle {
+    # Inline policies are adopted by separate aws_iam_role_policy resources.
+    ignore_changes = [inline_policy]
+  }
 }
 
 resource "aws_iam_role_policy" "report_mailer" {
@@ -64,6 +69,11 @@ resource "aws_iam_role" "report_builder" {
 
   tags = {
     PROJECT_NAME = var.project_name
+  }
+
+  lifecycle {
+    # Inline policies are adopted by separate aws_iam_role_policy resources.
+    ignore_changes = [inline_policy]
   }
 }
 
@@ -116,6 +126,11 @@ resource "aws_iam_role" "scheduler" {
 
   tags = {
     PROJECT_NAME = var.project_name
+  }
+
+  lifecycle {
+    # Inline policies are adopted by a separate aws_iam_role_policy resource.
+    ignore_changes = [inline_policy]
   }
 }
 

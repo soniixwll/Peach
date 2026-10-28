@@ -38,6 +38,9 @@ resource "aws_lambda_function" "report_mailer" {
 
   lifecycle {
     prevent_destroy = true
+
+    # Lambda does not return the original S3 source location during import.
+    ignore_changes = [s3_bucket, s3_key]
   }
 }
 
@@ -55,6 +58,7 @@ resource "aws_lambda_permission" "report_mailer_from_s3" {
 
 resource "aws_sqs_queue" "reports_dlq" {
   name                      = "${var.project_name}-reports-dlq"
+  max_message_size          = 1048576
   message_retention_seconds = 1209600
   sqs_managed_sse_enabled   = true
 
@@ -70,6 +74,7 @@ resource "aws_sqs_queue" "reports_dlq" {
 resource "aws_sqs_queue" "reports" {
   name                       = "${var.project_name}-reports"
   visibility_timeout_seconds = 1080
+  max_message_size           = 1048576
   message_retention_seconds  = 1209600
   sqs_managed_sse_enabled    = true
   redrive_policy = jsonencode({

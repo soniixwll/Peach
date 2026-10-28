@@ -56,6 +56,11 @@ resource "aws_cognito_user_pool" "users" {
 
   lifecycle {
     prevent_destroy = true
+
+    # Cognito schemas cannot be removed or changed after pool creation. The API
+    # returns every built-in attribute on import, not only the two configured by
+    # the original CloudFormation template.
+    ignore_changes = [schema]
   }
 }
 
@@ -65,9 +70,15 @@ resource "aws_cognito_identity_provider" "google" {
   provider_type = "Google"
 
   provider_details = {
-    client_id        = var.google_client_id
-    client_secret    = var.google_client_secret
-    authorize_scopes = "openid email profile"
+    client_id                     = var.google_client_id
+    client_secret                 = var.google_client_secret
+    authorize_scopes              = "openid email profile"
+    attributes_url                = "https://people.googleapis.com/v1/people/me?personFields="
+    attributes_url_add_attributes = "true"
+    authorize_url                 = "https://accounts.google.com/o/oauth2/v2/auth"
+    oidc_issuer                   = "https://accounts.google.com"
+    token_request_method          = "POST"
+    token_url                     = "https://www.googleapis.com/oauth2/v4/token"
   }
 
   attribute_mapping = {
@@ -81,7 +92,6 @@ resource "aws_cognito_user_pool_client" "spa" {
   name         = "${var.project_name}-frontend"
   user_pool_id = aws_cognito_user_pool.users.id
 
-  generate_secret                      = false
   prevent_user_existence_errors        = "ENABLED"
   enable_token_revocation              = true
   allowed_oauth_flows_user_pool_client = true
