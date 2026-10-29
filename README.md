@@ -53,6 +53,7 @@ production deployment manifests. Leave hooks for them, do not build them.
 
 - Docker + Docker Compose v2
 - PostgreSQL 17 (`postgres:17-alpine`)
+- Terraform 1.17 with AWS provider 6.70, executed remotely by HCP Terraform in `us-east-1`
 
 ---
 
@@ -74,7 +75,15 @@ Peach/
 ├── infra/
 │   ├── backend.yaml              # CloudFormation: Lambda + function URL + Aurora Serverless v2
 │   ├── frontend.yaml             # CloudFormation: S3 + CloudFront (+ optional custom domain)
+│   ├── artifacts.yml             # CloudFormation: deployment-artifact bucket
 │   └── github-oidc.yaml          # CloudFormation: the role Actions assumes
+│
+├── terraform/                    # HCP-managed Cognito, reports, and AI infrastructure
+│   ├── auth.tf                   # Cognito pool, client, Google IdP, domain, branding
+│   ├── reports*.tf               # S3, SQS, Lambdas, Scheduler, IAM, and notifications
+│   ├── ai*.tf                    # Nova parser Lambda, URL, IAM, logs, and budget
+│   ├── imports.tf                # declarative record of the CloudFormation handoff
+│   └── versions.tf               # pinned Terraform and AWS provider versions
 │
 ├── scripts/
 │   ├── deploy-backend.sh         # build -> ECR -> CloudFormation -> migrate -> BACKEND_URL in .env
@@ -231,7 +240,7 @@ its title, timezone-aware start, duration, participant count, agenda items, and 
 the form began with an AI suggestion, the original suggestion plus its model and prompt version
 are stored for traceability; manual meetings leave those fields null.
 
-`make deploy-ai` creates a separate, non-VPC Lambda Function URL that parses pasted text with
+Terraform manages a separate, non-VPC Lambda Function URL that parses pasted text with
 Amazon Nova Micro through Bedrock Converse. The parser has no database configuration or database
 permissions. The browser must show the suggestion for review, and only `/api/v1/meetings` performs
 the eventual save. If Bedrock is unavailable, the same form remains usable for manual entry. See
@@ -239,11 +248,13 @@ the eventual save. If Bedrock is unavailable, the same form remains usable for m
 [production evaluation](docs/evaluations/agenda-v1-step5.md) for measured quality, latency, and
 cost.
 
-Deployment order for this feature is:
+Application deployment order for this feature is:
 
-1. Set `AI_BUDGET_EMAIL` and keep `AWS_REGION=us-east-1` in the ignored `.env`.
-2. Run `make deploy-backend` to publish the image and apply migration `0004`.
-3. Run `make deploy-ai`; it writes the public `AGENDA_PARSER_URL` to ignored `.env`.
+1. Manage agenda-parser infrastructure changes through the HCP Terraform VCS workflow described
+   in §14; do not recreate the deleted `peach-ai` CloudFormation stack.
+2. Run `make deploy-backend` to publish the backend image and apply database migrations.
+3. Copy the non-secret `agenda_parser_function_url` HCP Terraform output to
+   `AGENDA_PARSER_URL` in the ignored `.env`.
 4. Run `make deploy-frontend` to compile that URL into the static frontend.
 
 For read-only model checks, `make llm-hello` sends a minimal Converse request and
@@ -563,34 +574,53 @@ build native and those two steps unnecessary.
 
 The frontend is not wired to CI — `make deploy-frontend` stays a local command for now.
 
-## 14. Where to take it next
+## 14. Terraform and HCP Terraform workflow
 
-### Cognito authentication infrastructure
+Terraform now owns the Cognito authentication, weekly reports, and Nova agenda-parser
+infrastructure in AWS account `451071929383`, region `us-east-1`. The former `peach-auth`,
+`peach-reports`, and `peach-ai` CloudFormation stacks were deleted only after their resources were
+retained and imported. Backend, database, artifact-bucket, frontend, and GitHub deployment-role
+infrastructure remain owned by their earlier CloudFormation stacks and are read through Terraform
+data sources where needed.
 
-`infra/auth.yml` defines a separate `peach-auth` stack with a self-service
-Cognito user pool, a public authorization-code SPA client, Google federation,
-and Cognito Managed Login. It does not modify the frontend or backend stacks.
+HCP Terraform organization `ooad-soniixwll`, workspace `Peach`, is configured with working
+directory `terraform`, remote execution/state, AWS dynamic credentials, and auto-apply disabled.
+The workspace follows `main`. Infrastructure changes use this workflow:
 
-Before deploying, provide the Google Web OAuth client credentials either as
-exported shell variables or in the Git-ignored `.env.auth.local` file:
+1. Edit files under `terraform/` on a branch. Never edit generated state or place secrets in
+   `.tfvars`.
+2. Run `make terraform-check` locally. This formats/checks and validates configuration but does
+   not contact AWS or apply anything.
+3. Open a pull request and review the HCP speculative plan. Stop on an unexpected replacement or
+   destroy, especially for Cognito, S3, Lambda, SQS, IAM, or the VPC endpoint.
+4. Merge to `main` only after review. Inspect the VCS-triggered HCP run and manually confirm apply;
+   auto-apply remains disabled.
+5. Run a plan-only verification afterward and require `0 to add, 0 to change, 0 to destroy`.
 
-```bash
-GOOGLE_CLIENT_ID=...
-GOOGLE_CLIENT_SECRET=...
-```
+Required Terraform input values are workspace Terraform variables in HCP. OAuth secrets, email
+addresses, and the deployed JWKS snapshot remain sensitive inputs and must never be committed,
+placed in `terraform.tfvars`, or pasted into logs. AWS authentication uses HCP dynamic credentials;
+do not create static AWS access keys. Non-secret values needed by application deployment can be
+copied from the workspace outputs into the ignored local `.env`.
 
-The Google secret is passed to a CloudFormation `NoEcho` parameter through a
-temporary mode-0600 file. It is never written to `.env`, frontend configuration,
-or CloudFormation outputs. Deploy with `make deploy-auth`. The configured Google
-redirect URI is:
+The declarative blocks in `terraform/imports.tf` document the completed 35-resource migration.
+They must not be edited casually because their IDs record the preserved physical identities. The
+three Lambda permissions that could not be imported are created directly by Terraform.
+
+For drift, first run an HCP **Plan only** operation and review the exact resource action. Restore
+the declared configuration through a normal reviewed VCS/HCP run; do not hide genuine drift with
+broad `ignore_changes` rules or make an unreviewed console edit. See
+[ADR 0007](docs/adr/0007-terraform-hcp-migration.md) for the migration and ownership decision.
+
+The configured Cognito Google redirect URI remains:
 
 ```text
 https://sofia-peach.auth.us-east-1.amazoncognito.com/oauth2/idpresponse
 ```
 
-The production callback and logout URL are both
-`https://www.sofia-peach.pp.ua/login/`. The public `/login/` frontend route and
-token handling are intentionally implemented separately from this stack.
+The production callback and logout URL are both `https://www.sofia-peach.pp.ua/login/`.
+
+## 15. Where to take it next
 
 When the real domain arrives, replace the `Item` model, schemas, service, routes and the `/items`
 screen, and add an Alembic revision for the new tables. Everything else — config, database wiring,

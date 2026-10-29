@@ -90,24 +90,18 @@ ACCOUNT_ID="$(aws sts get-caller-identity --query Account --output text 2>/dev/n
 CALLER="$(aws sts get-caller-identity --query Arn --output text)"
 log "account ${ACCOUNT_ID} in ${AWS_REGION} as ${CALLER}"
 
-# Cognito's JWKS endpoint is public, but the VPC-attached Lambda has no NAT.
-# Snapshot the public signing keys here and inject them into the function so
-# token verification never needs runtime internet access.
-AUTH_STACK_NAME="${AUTH_STACK_NAME:-${PROJECT_NAME}-auth}"
-auth_output() {
-  aws cloudformation describe-stacks --stack-name "${AUTH_STACK_NAME}" \
-    --query "Stacks[0].Outputs[?OutputKey=='$1'].OutputValue" --output text
-}
-
-COGNITO_USER_POOL_ID="$(auth_output UserPoolId)"
-COGNITO_CLIENT_ID="$(auth_output UserPoolClientId)"
-COGNITO_ISSUER="$(auth_output Issuer)"
+# Cognito is owned by Terraform, while this backend remains in CloudFormation.
+# Discover the stable Terraform-managed identities by their configured names.
+COGNITO_USER_POOL_ID="$(aws cognito-idp list-user-pools --max-results 60 \
+  --query "UserPools[?Name=='${PROJECT_NAME}-users'].Id | [0]" --output text)"
 [[ -n "${COGNITO_USER_POOL_ID}" && "${COGNITO_USER_POOL_ID}" != "None" ]] \
-  || die "${AUTH_STACK_NAME} has no UserPoolId output - run make deploy-auth first"
+  || die "Terraform-managed Cognito pool ${PROJECT_NAME}-users was not found in ${AWS_REGION}"
+COGNITO_CLIENT_ID="$(aws cognito-idp list-user-pool-clients \
+  --user-pool-id "${COGNITO_USER_POOL_ID}" --max-results 60 \
+  --query "UserPoolClients[?ClientName=='${PROJECT_NAME}-frontend'].ClientId | [0]" --output text)"
 [[ -n "${COGNITO_CLIENT_ID}" && "${COGNITO_CLIENT_ID}" != "None" ]] \
-  || die "${AUTH_STACK_NAME} has no UserPoolClientId output"
-[[ -n "${COGNITO_ISSUER}" && "${COGNITO_ISSUER}" != "None" ]] \
-  || die "${AUTH_STACK_NAME} has no Issuer output"
+  || die "Terraform-managed Cognito client ${PROJECT_NAME}-frontend was not found"
+COGNITO_ISSUER="https://cognito-idp.${AWS_REGION}.amazonaws.com/${COGNITO_USER_POOL_ID}"
 
 JWKS_URL="${COGNITO_ISSUER}/.well-known/jwks.json"
 COGNITO_JWKS_JSON="$(curl -fsS --max-time 30 "${JWKS_URL}" | python3 -c '
@@ -121,7 +115,7 @@ for key in keys:
         raise SystemExit("Cognito JWKS contains an invalid key")
 print(json.dumps(document, separators=(",", ":")))
 ')" || die "could not download and validate Cognito JWKS"
-log "loaded Cognito public signing-key snapshot from ${AUTH_STACK_NAME}"
+log "loaded Cognito public signing-key snapshot from Terraform-managed ${PROJECT_NAME}-users"
 
 # --- network ----------------------------------------------------------------
 

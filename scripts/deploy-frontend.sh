@@ -68,7 +68,7 @@ log "building against ${API_URL}"
   || die "BACKEND_URL must be https:// - browsers block an HTTPS page calling HTTP"
 
 for var in COGNITO_REGION COGNITO_USER_POOL_ID COGNITO_CLIENT_ID COGNITO_DOMAIN; do
-  [[ -n "${!var:-}" ]] || die "${var} is not set in .env - run make deploy-auth first"
+  [[ -n "${!var:-}" ]] || die "${var} is not set in .env - copy it from the HCP Terraform outputs"
 done
 
 AUTH_CALLBACK_URL="${AUTH_CALLBACK_URL:-https://www.sofia-peach.pp.ua/login/}"
@@ -76,7 +76,7 @@ AUTH_CALLBACK_URL="${AUTH_CALLBACK_URL:-https://www.sofia-peach.pp.ua/login/}"
   || die "AUTH_CALLBACK_URL must be an HTTPS URL ending in /login/"
 APP_URL="${AUTH_CALLBACK_URL%/login/}"
 AGENDA_PARSER_URL="${AGENDA_PARSER_URL:-}"
-[[ -n "${AGENDA_PARSER_URL}" ]] || die "AGENDA_PARSER_URL is not set in .env - run make deploy-ai first"
+[[ -n "${AGENDA_PARSER_URL}" ]] || die "AGENDA_PARSER_URL is not set in .env - copy agenda_parser_function_url from the HCP Terraform outputs"
 
 # --- infrastructure ---------------------------------------------------------
 

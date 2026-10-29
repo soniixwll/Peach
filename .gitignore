@@ -32,7 +32,14 @@ out/
 *.tfstate
 *.tfstate.*
 *.tfvars
+*.tfvars.json
+*.auto.tfvars
+*.auto.tfvars.json
 !*.tfvars.example
+*.tfplan
+.terraform.tfstate.lock.info
+terraform.rc
+.terraformrc
 crash.log
 crash.*.log
 

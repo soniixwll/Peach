@@ -1,6 +1,6 @@
 COMPOSE := docker compose
 
-.PHONY: help up down build logs ps migrate revision test test-backend test-frontend lint fmt clean shell-backend shell-db deploy-auth deploy-backend destroy-backend logs-backend migrate-backend package-report-mailer deploy-reports seed-report-meetings report-now llm-hello parse deploy-ai cert domain deploy-frontend destroy-frontend github-role
+.PHONY: help up down build logs ps migrate revision test test-backend test-frontend lint fmt clean shell-backend shell-db terraform-fmt terraform-validate terraform-check deploy-backend destroy-backend logs-backend migrate-backend package-report-mailer seed-report-meetings report-now llm-hello parse cert domain deploy-frontend destroy-frontend github-role
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-16s\033[0m %s\n", $$1, $$2}'
@@ -51,8 +51,13 @@ shell-backend: ## Shell into the backend container
 shell-db: ## psql into the database
 	$(COMPOSE) exec db psql -U $${POSTGRES_USER:-peach} -d $${POSTGRES_DB:-peach}
 
-deploy-auth: ## Create/update Cognito email/password + Google Managed Login
-	./scripts/deploy-auth.sh
+terraform-fmt: ## Check formatting for the Terraform configuration
+	terraform -chdir=terraform fmt -check -recursive
+
+terraform-validate: ## Validate the Terraform configuration locally (no plan/apply)
+	terraform -chdir=terraform validate
+
+terraform-check: terraform-fmt terraform-validate ## Run safe local Terraform checks
 
 deploy-backend: ## Build + push the image, roll the Lambda (function URL + Aurora), migrate, write BACKEND_URL to .env
 	./scripts/deploy-backend.sh
@@ -70,9 +75,6 @@ migrate-backend: ## Re-run migrations on the deployed backend (deploy-backend al
 package-report-mailer: ## Build the lightweight mailer Lambda ZIP locally
 	./scripts/package-report-mailer.sh
 
-deploy-reports: ## Deploy reports infrastructure; requires REPORT_RECIPIENT_EMAIL
-	./scripts/deploy-reports.sh
-
 seed-report-meetings: ## Seed deterministic samples: make seed-report-meetings WEEK=2026-W40
 	WEEK="$(WEEK)" ./scripts/seed-report-meetings.sh
 
@@ -85,9 +87,6 @@ llm-hello: ## Verify Amazon Nova access through Bedrock Converse
 parse: ## Parse text with Nova: make parse TEXT="Team sync tomorrow at 10"
 	@test -n "$(TEXT)" || (echo 'TEXT is required' >&2; exit 2)
 	cd backend && AWS_REGION=us-east-1 uv run python -m app.ai.cli parse --text "$(TEXT)"
-
-deploy-ai: ## Deploy the isolated Nova agenda-parser Lambda and $5 budget
-	./scripts/deploy-ai.sh
 
 cert: ## Request + DNS-validate a us-east-1 certificate for the frontend: make cert DOMAIN=app.example.com
 	./scripts/domain-frontend.sh cert
