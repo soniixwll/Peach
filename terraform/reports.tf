@@ -204,6 +204,10 @@ resource "aws_lambda_event_source_mapping" "report_builder" {
   maximum_batching_window_in_seconds = 0
   enabled                            = true
 
+  tags = {
+    PROJECT_NAME = var.project_name
+  }
+
   lifecycle {
     prevent_destroy = true
   }
