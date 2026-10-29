@@ -27,5 +27,14 @@ out/
 .vscode/
 .DS_Store
 
+# --- terraform ---
+**/.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+!*.tfvars.example
+crash.log
+crash.*.log
+
 # --- docker ---
 pgdata/

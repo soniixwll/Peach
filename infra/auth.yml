@@ -76,6 +76,8 @@ Resources:
 
   GoogleIdentityProvider:
     Type: AWS::Cognito::UserPoolIdentityProvider
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Properties:
       UserPoolId: !Ref UserPool
       ProviderName: Google
@@ -91,6 +93,8 @@ Resources:
 
   SpaClient:
     Type: AWS::Cognito::UserPoolClient
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     DependsOn: GoogleIdentityProvider
     Properties:
       ClientName: !Sub "${ProjectName}-frontend"
@@ -117,6 +121,8 @@ Resources:
 
   UserPoolDomain:
     Type: AWS::Cognito::UserPoolDomain
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Properties:
       Domain: !Ref CognitoDomainPrefix
       UserPoolId: !Ref UserPool
@@ -124,6 +130,8 @@ Resources:
 
   ManagedLoginBranding:
     Type: AWS::Cognito::ManagedLoginBranding
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     DependsOn: UserPoolDomain
     Properties:
       UserPoolId: !Ref UserPool
