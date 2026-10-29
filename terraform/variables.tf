@@ -123,5 +123,5 @@ variable "log_retention_days" {
 variable "enable_recreated_lambda_permissions" {
   description = "Enable only during the reviewed CloudFormation ownership handoff; Lambda permissions cannot be imported."
   type        = bool
-  default     = false
+  default     = true
 }

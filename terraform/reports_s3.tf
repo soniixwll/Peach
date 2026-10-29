@@ -65,5 +65,5 @@ resource "aws_s3_bucket_notification" "reports" {
     filter_suffix       = ".csv"
   }
 
-  depends_on = [aws_lambda_permission.report_mailer_from_s3]
+  depends_on = [aws_lambda_permission.report_mailer_invoke]
 }

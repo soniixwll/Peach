@@ -45,7 +45,7 @@ resource "aws_lambda_function" "report_mailer" {
 }
 
 # aws_lambda_permission has no import support. Create only during the later ownership handoff.
-resource "aws_lambda_permission" "report_mailer_from_s3" {
+resource "aws_lambda_permission" "report_mailer_invoke" {
   count = var.enable_recreated_lambda_permissions ? 1 : 0
 
   statement_id   = "peach-reports-ReportMailerInvokePermission-MfllIiBgjSW3"
