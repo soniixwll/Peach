@@ -1,0 +1,22 @@
+project_id  = "peach-gcp-lab"
+region      = "europe-central2"
+environment = "lab"
+terraform_service_account_email = "peach-hcp-terraform@peach-gcp-lab.iam.gserviceaccount.com"
+
+# Keep false for the first infrastructure run. Build and push the image, then
+# set true in the separate Peach-GCP HCP workspace and review a new plan.
+deploy_cloud_run = false
+backend_image_tag = "gcp-lab"
+
+# Set db_password as a sensitive HCP Terraform variable, never in this file.
+# db_password = "use-a-long-random-value-from-a-password-manager"
+
+# Existing AWS Cognito values keep sign-in on AWS during this lab.
+cognito_issuer    = "https://cognito-idp.us-east-1.amazonaws.com/POOL_ID"
+cognito_client_id = "PUBLIC_APP_CLIENT_ID"
+# Set cognito_jwks_json as a sensitive HCP Terraform variable.
+
+cors_origins = "https://peach-gcp-lab.web.app,https://peach-gcp-lab.firebaseapp.com"
+
+# Enable only immediately before the later BigQuery/OCR demo phase.
+enable_demo_apis = false
