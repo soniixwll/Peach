@@ -43,8 +43,11 @@ The deciding line is relational database compute.
   bytes (10 MiB billed minimum). Result table: `lab9_demo.shakespeare_top_words`; job:
   `bqjob_rd3ed3022848c59b_000001a1eb1004ff_1`.
 - [ ] `docs/lab9/evidence/bigquery-public-query.png` — capture the completed Console query and result.
-- [ ] `docs/lab9/evidence/looker-studio-chart.png` — chart over
-  `lab9_demo.shakespeare_top_words` (data source is prepared; final account-consent click remains).
+- [x] Looker Studio report editor configured as **Peach Lab 9 - Shakespeare Top Words**. It is
+  connected to `lab9_demo.shakespeare_top_words` and displays the 20-row result as a table and chart.
+- [ ] Complete the one-time Data Studio account setup (country, company, and terms) to persist and
+  share the report; these personal/organizational choices must be made by the account owner.
+- [ ] `docs/lab9/evidence/looker-studio-chart.png` — capture the completed report canvas.
 - [x] Vision OCR demo executed against Google's public `cloud-samples-data/vision/ocr/sign.jpg`
   sample. Detected text: “WAITING? PLEASE TURN OFF YOUR ENGINE”.
 - [ ] `docs/lab9/evidence/vision-ocr.png` — capture the OCR result.
