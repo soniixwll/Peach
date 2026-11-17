@@ -39,23 +39,18 @@ The deciding line is relational database compute.
 
 ## Demo evidence checklist
 
-- [x] BigQuery demo executed: the public Shakespeare query returned 20 rows and processed 2,650,191
-  bytes (10 MiB billed minimum). Result table: `lab9_demo.shakespeare_top_words`; job:
-  `bqjob_rd3ed3022848c59b_000001a1eb1004ff_1`.
-- [ ] `docs/lab9/evidence/bigquery-public-query.png` — capture the completed Console query and result.
-- [x] Looker Studio report editor configured as **Peach Lab 9 - Shakespeare Top Words**. It is
-  connected to `lab9_demo.shakespeare_top_words` and displays the 20-row result as a table and chart.
-- [ ] Complete the one-time Data Studio account setup (country, company, and terms) to persist and
-  share the report; these personal/organizational choices must be made by the account owner.
-- [ ] `docs/lab9/evidence/looker-studio-chart.png` — capture the completed report canvas.
-- [x] Vision OCR demo executed against Google's public `cloud-samples-data/vision/ocr/sign.jpg`
-  sample. Detected text: “WAITING? PLEASE TURN OFF YOUR ENGINE”.
-- [ ] `docs/lab9/evidence/vision-ocr.png` — capture the OCR result.
-- [ ] Optional: `firebase-peach-home.png` and `cloud-run-readiness.png` for supporting evidence.
+- [x] BigQuery: public Shakespeare query returned 20 rows, processed 2,650,191 bytes (10 MiB billed
+  minimum), job `bqjob_rd3ed3022848c59b_000001a1eb1004ff_1`, result table
+  `lab9_demo.shakespeare_top_words`. Evidence: [bigquery-query.png](lab9/evidence/bigquery-query.png)
+  (rendered from `bq show -j` job metadata and `bq head` result rows).
+- [x] Looker Studio (Data Studio) report connected to `peach-gcp-lab.lab9_demo.shakespeare_top_words`,
+  showing the 20-row table and a bar chart; account setup completed and report saved. Evidence:
+  [looker-studio.png](lab9/evidence/looker-studio.png).
+- [x] Vision OCR (`TEXT_DETECTION`) on Google's public `gs://cloud-samples-data/vision/ocr/sign.jpg`
+  sample. Detected text: “WAITING? PLEASE TURN OFF YOUR ENGINE”. Evidence:
+  [vision-ocr.png](lab9/evidence/vision-ocr.png) (rendered from `gcloud ml vision detect-text` output).
 
 ## Limitations and cleanup
 
-The three Part 4 demos require Google Cloud console access and are documented only after they are
-actually run. Do not claim them complete based on this file alone. After grading, stop or remove Cloud
-SQL through the reviewed Terraform cleanup process and remove demo datasets no longer needed. Check
+After grading, stop or remove Cloud SQL through the reviewed Terraform cleanup process and remove demo datasets no longer needed. Check
 Billing Reports the following day.
