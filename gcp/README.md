@@ -63,7 +63,18 @@ BigQuery, Vision, and Document AI are declared behind `enable_demo_apis = false`
 the later evidence/demo phase. No Cloud Build API is needed because the documented workflow builds
 the image locally or in existing CI.
 
-## Safe staged deployment
+## Deployed architecture and safe staged deployment
+
+The lab deployment is live in `peach-gcp-lab` (`europe-central2`):
+
+- frontend: <https://peach-gcp-lab.web.app>
+- API: <https://peach-lab-api-7sq7lhfuha-lm.a.run.app>
+- Cloud SQL: `peach-lab-postgres`
+- Artifact Registry repository: `peach-backend`
+- migration job: `peach-lab-migrate` (Alembic revision `0004` applied)
+
+The core moved to GCP. Cognito/Google sign-in, weekly reports, SES delivery, and the agenda parser
+remain on AWS. The API accepts the existing Cognito tokens, so both deployments continue to work.
 
 `deploy_cloud_run` defaults to `false`. The first reviewed apply creates the APIs, repository,
 database, secret, runtime identity, and Firebase site, but not Cloud Run: an empty Artifact Registry
@@ -110,9 +121,23 @@ cd ../gcp
 firebase deploy --only hosting --project peach-gcp-lab
 ```
 
-`firebase.json` publishes `frontend/out`, enables clean URLs for exported routes, and gives immutable
-Next.js assets long cache lifetimes. Firebase deployment and Cognito callback/logout changes require
-separate approval.
+Firebase CLI 15 does not allow a `public` directory outside the directory containing
+`firebase.json`. The Hosting `predeploy` hook therefore copies the already-built `frontend/out`
+into the ignored `gcp/.firebase-hosting/` staging directory. No generated frontend output is tracked.
+`firebase.json` enables clean URLs for exported routes and gives immutable Next.js assets long cache
+lifetimes. Firebase deployment and Cognito callback/logout changes require separate approval.
+
+To validate the staging step without deploying:
+
+```sh
+cd gcp
+./scripts/stage-firebase-hosting.sh
+test -f .firebase-hosting/index.html
+```
+
+To stop database compute charges without destroying the lab, stop `peach-lab-postgres` in Cloud SQL.
+Storage and retained backups still incur charges while stopped. Restart it before demonstrating the
+database-backed API. Permanent cleanup remains the reviewed two-step Terraform process below.
 
 ## Cost and cleanup
 

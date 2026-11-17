@@ -1,7 +1,8 @@
 {
   "hosting": {
     "site": "peach-gcp-lab",
-    "public": "../frontend/out",
+    "public": ".firebase-hosting",
+    "predeploy": ["./scripts/stage-firebase-hosting.sh"],
     "cleanUrls": true,
     "trailingSlash": false,
     "ignore": ["firebase.json", "**/.*", "**/node_modules/**"],

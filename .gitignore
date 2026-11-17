@@ -16,6 +16,9 @@ node_modules/
 out/
 .turbo/
 *.tsbuildinfo
+gcp/.firebase-hosting/
+gcp/.firebase/
+gcp/firebase-debug.log
 
 # --- env ---
 .env

@@ -1,6 +1,6 @@
 # ADR 0008: Run the Peach core on Google Cloud alongside AWS
 
-- **Status:** Proposed
+- **Status:** Accepted
 - **Date:** 2026-11-16
 
 ## Context
@@ -16,17 +16,26 @@ Add a separate Terraform root in `gcp/`, executed by a separate HCP Terraform wo
 `Peach-GCP` with working directory `gcp`. It uses only the Google provider and its own remote state;
 the existing `Peach` workspace, `terraform/` AWS root, and CloudFormation stacks remain unchanged.
 
-Map the core services as follows:
+Map the AWS services as follows. “Keep” means the service remains on AWS during this lab; “drop”
+means the feature is outside the migrated core.
 
-| Existing AWS service | GCP lab service |
-| --- | --- |
-| Lambda container running FastAPI | Cloud Run running `app.main:app` |
-| ECR | Artifact Registry |
-| Aurora PostgreSQL | Cloud SQL for PostgreSQL |
-| AWS Secrets Manager | Secret Manager |
-| S3 and CloudFront static frontend | Firebase Hosting |
-| CloudWatch logs and metrics | Cloud Logging and Cloud Monitoring |
-| AWS Terraform provider/state | Google provider in separate state |
+| Existing AWS service | Decision | GCP lab service / reason |
+| --- | --- | --- |
+| S3 + CloudFront + WAF static frontend | Replace for GCP core | Firebase Hosting includes CDN, TLS, and a free lab-sized quota. |
+| Lambda container running FastAPI | Replace for GCP core | Cloud Run runs the ASGI container on `PORT` and scales to zero. |
+| ECR | Replace for GCP core | Artifact Registry stores the Cloud Run image. |
+| Aurora PostgreSQL | Replace for GCP core | Cloud SQL PostgreSQL preserves SQLAlchemy, relations, and Alembic with minimal code change. |
+| DynamoDB alternative | Drop | Firestore would be cheaper when idle but requires a data-model and repository rewrite. |
+| Cognito user pool + Google | Keep | Existing Cognito tokens work on both APIs; Identity Platform is optional stretch work. |
+| EventBridge Scheduler | Keep | Weekly reports are not part of the migrated core; Cloud Scheduler is the future counterpart. |
+| SQS | Keep | Existing report/event flows stay on AWS; Pub/Sub or Cloud Tasks would be the future counterpart. |
+| S3 events + Lambda | Keep | Agenda/report non-core flows stay on AWS; Cloud Storage + Eventarc is the counterpart. |
+| SES | Keep | GCP has no direct transactional-mail equivalent and retaining SES avoids a provider migration. |
+| Bedrock/Nova | Keep | Agenda parsing is a stretch goal; Vertex AI is the evaluated counterpart. |
+| SSM Parameter Store / Secrets Manager | Replace for GCP core | Secret Manager stores `DATABASE_URL`; AWS secrets remain intact for AWS. |
+| CloudWatch Logs | Replace for GCP core | Cloud Run writes to Cloud Logging automatically. |
+| IAM roles | Replace for GCP resources | Dedicated service accounts and least-privilege IAM roles; no JSON keys. |
+| Terraform AWS provider/state | Add alongside | Google providers in an isolated `Peach-GCP` HCP workspace and state. |
 
 Use the existing Alembic history to initialize an empty Cloud SQL database. Do not copy Aurora data.
 Run migrations through a one-off Cloud Run Job rather than during every API container startup. The
@@ -39,6 +48,15 @@ existing Cognito deployment for sign-in during the lab.
 Weekly reports, the Bedrock/Nova agenda parser, SES mail delivery, Lambda jobs, Cognito, and all other
 non-core features remain on AWS. Migrating them is unnecessary for the required core demonstration
 and would increase cost, scope, and cross-cloud security risk.
+
+Cloud SQL was chosen instead of Firestore or a cross-cloud Aurora connection. It keeps application
+code and migrations portable and avoids cross-cloud latency and egress, at the cost of continuous
+instance billing. The instance can be stopped between demonstrations, but storage continues to bill.
+Keeping Aurora would minimize data migration but couple every GCP API request to AWS networking and
+availability. Firestore would scale to zero but requires rewriting relational queries and migrations.
+
+E-mail remains on SES. No new API key is needed; if a later migration chooses SendGrid or Mailgun,
+its key belongs in Secret Manager and is granted only to the runtime service account.
 
 ## Consequences
 
